@@ -18,9 +18,10 @@ import { ApiSettingsPage } from '@/components/api-settings-page'
 import { ChangePinPage } from '@/components/change-pin-page'
 import { BotAlertPage } from '@/components/bot-alert-page'
 import { GiftCodesPage } from '@/components/gift-codes-page'
+import WebhookSetupPage from '@/components/webhook-setup-page'
 import { Loader2, Zap } from 'lucide-react'
 
-type Page = 'dashboard' | 'addFund' | 'withdraw' | 'send' | 'history' | 'scratch' | 'spin' | 'refer' | 'claim' | 'bulk' | 'profile' | 'api' | 'changePin' | 'bot' | 'giftCodes'
+type Page = 'dashboard' | 'addFund' | 'withdraw' | 'send' | 'history' | 'scratch' | 'spin' | 'refer' | 'claim' | 'bulk' | 'profile' | 'api' | 'changePin' | 'bot' | 'giftCodes' | 'webhook'
 
 function WalletApp() {
   const { isLoggedIn, isLoading } = useWallet()
@@ -77,6 +78,8 @@ function WalletApp() {
         return <BotAlertPage onBack={() => setCurrentPage('dashboard')} />
       case 'giftCodes':
         return <GiftCodesPage onBack={() => setCurrentPage('dashboard')} />
+      case 'webhook':
+        return <WebhookSetupPage onBack={() => setCurrentPage('dashboard')} />
       default:
         return <Dashboard onNavigate={setCurrentPage} currentPage={currentPage} />
     }

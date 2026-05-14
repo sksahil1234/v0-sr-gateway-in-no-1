@@ -23,10 +23,11 @@ import {
   ExternalLink,
   X,
   BadgeCheck,
-  Crown
+  Crown,
+  Webhook
 } from 'lucide-react'
 
-type Page = 'dashboard' | 'addFund' | 'withdraw' | 'send' | 'history' | 'scratch' | 'spin' | 'refer' | 'claim' | 'bulk' | 'profile' | 'api' | 'changePin' | 'bot' | 'giftCodes'
+type Page = 'dashboard' | 'addFund' | 'withdraw' | 'send' | 'history' | 'scratch' | 'spin' | 'refer' | 'claim' | 'bulk' | 'profile' | 'api' | 'changePin' | 'bot' | 'giftCodes' | 'webhook'
 
 interface DashboardProps {
   onNavigate: (page: Page) => void
@@ -57,6 +58,7 @@ export function Dashboard({ onNavigate, currentPage }: DashboardProps) {
     { icon: <Lock className="w-5 h-5" />, label: 'Change PIN', page: 'changePin' as Page },
     { icon: <MessageCircle className="w-5 h-5" />, label: 'Bot Alert', page: 'bot' as Page },
     { icon: <Gift className="w-5 h-5" />, label: 'Gift Codes', page: 'giftCodes' as Page },
+    { icon: <Webhook className="w-5 h-5" />, label: 'Webhook Setup', page: 'webhook' as Page },
   ]
 
   return (
