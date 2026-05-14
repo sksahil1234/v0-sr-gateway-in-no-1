@@ -127,6 +127,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         body: JSON.stringify({
           type,
           chatId: user.telegramId,
+          userMobile: user.mobile,
+          userName: user.name,
           ...data
         })
       })

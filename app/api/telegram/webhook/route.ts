@@ -20,22 +20,23 @@ export async function POST(request: NextRequest) {
       
       // Handle /start command
       if (text === '/start') {
-        const welcomeMessage = `🎉 *Welcome to SR GATEWAY Bot!*
+        const welcomeMessage = `*Welcome to SR GATEWAY Bot!*
 
-Hello ${firstName}! 👋
+Hello ${firstName}!
 
 Main aapko SR GATEWAY app ke saare notifications yahan bhejunga:
 
-✅ *OTP Verification*
-✅ *Transaction Alerts*
-✅ *Withdrawal Updates*
-✅ *Security Notifications*
+*OTP Verification*
+*Transaction Alerts*
+*Withdrawal Updates*
+*Security Notifications*
 
-━━━━━━━━━━━━━━━━━━━━━
-📱 *Your Chat ID:* \`${chatId}\`
-━━━━━━━━━━━━━━━━━━━━━
+*Your Chat ID:* \`${chatId}\`
 
-👆 Is Chat ID ko copy karke SR GATEWAY app mein paste karo aur Bot Alert connect karo.
+Is Chat ID ko copy karke SR GATEWAY app mein paste karo aur Bot Alert connect karo.
+
+*Channel:* @SR_TECHNOLOGY_LTD1
+Yahan sabhi transactions ka live history dekhein!
 
 _Powered by SR GATEWAY_`
 

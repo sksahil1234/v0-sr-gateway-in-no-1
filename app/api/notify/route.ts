@@ -4,6 +4,9 @@ import {
   sendWithdrawalUpdate,
   sendWelcomeMessage,
   sendSecurityAlert,
+  sendToGlobalChannel,
+  sendWithdrawalToChannel,
+  sendNewUserToChannel,
   generateTransactionId 
 } from '@/lib/telegram'
 
@@ -12,7 +15,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { type, chatId, ...data } = body
 
-    if (!chatId) {
+    if (!chatId && type !== 'channel_only') {
       return NextResponse.json(
         { success: false, error: 'Telegram Chat ID required' },
         { status: 400 }
@@ -20,14 +23,19 @@ export async function POST(request: NextRequest) {
     }
 
     let result
+    let channelResult
 
     switch (type) {
       case 'welcome':
         result = await sendWelcomeMessage(chatId, data.name, data.mobile)
+        // Also send to channel
+        channelResult = await sendNewUserToChannel(data.name, data.mobile)
         break
 
       case 'transaction':
         const transactionId = data.transactionId || generateTransactionId()
+        
+        // Send to user's personal Telegram
         result = await sendTransactionAlert(
           chatId,
           transactionId,
@@ -42,6 +50,28 @@ export async function POST(request: NextRequest) {
             balance: data.balance
           }
         )
+        
+        // Map transaction type for channel
+        const channelType = data.transactionType === 'credit' ? 'credit' 
+          : data.transactionType === 'debit' ? 'debit'
+          : data.transactionType === 'transfer_in' ? 'transfer'
+          : data.transactionType === 'transfer_out' ? 'transfer'
+          : 'credit'
+        
+        // Send to global channel with masked info
+        channelResult = await sendToGlobalChannel(
+          transactionId,
+          channelType,
+          data.amount,
+          data.status,
+          data.userMobile || 'Unknown',
+          data.userName,
+          {
+            comment: data.comment,
+            method: data.method
+          }
+        )
+        
         if (result.success) {
           return NextResponse.json({ success: true, transactionId })
         }
@@ -56,6 +86,15 @@ export async function POST(request: NextRequest) {
           data.status,
           data.adminNote
         )
+        
+        // Send to global channel
+        channelResult = await sendWithdrawalToChannel(
+          data.withdrawalId,
+          data.amount,
+          data.status,
+          data.userMobile || 'Unknown',
+          data.upiId
+        )
         break
 
       case 'security':
@@ -64,6 +103,73 @@ export async function POST(request: NextRequest) {
           device: data.device,
           location: data.location
         })
+        break
+        
+      case 'add_fund':
+        const addFundTxnId = data.transactionId || generateTransactionId()
+        
+        // Send to user
+        result = await sendTransactionAlert(
+          chatId,
+          addFundTxnId,
+          'credit',
+          data.amount,
+          data.status,
+          {
+            comment: `Add Fund via UPI - UTR: ${data.utrNumber}`,
+            balance: data.balance
+          }
+        )
+        
+        // Send to channel
+        channelResult = await sendToGlobalChannel(
+          addFundTxnId,
+          'add_fund',
+          data.amount,
+          data.status,
+          data.userMobile || 'Unknown',
+          data.userName,
+          {
+            method: 'UPI',
+            comment: `UTR: ${data.utrNumber?.slice(0, 4)}****`
+          }
+        )
+        
+        if (result.success) {
+          return NextResponse.json({ success: true, transactionId: addFundTxnId })
+        }
+        break
+        
+      case 'spin_win':
+      case 'scratch_win':
+        const winTxnId = data.transactionId || generateTransactionId()
+        
+        // Send to user
+        result = await sendTransactionAlert(
+          chatId,
+          winTxnId,
+          'credit',
+          data.amount,
+          'success',
+          {
+            comment: type === 'spin_win' ? 'Spin & Win Prize' : 'Scratch Card Prize',
+            balance: data.balance
+          }
+        )
+        
+        // Send to channel
+        channelResult = await sendToGlobalChannel(
+          winTxnId,
+          type,
+          data.amount,
+          'success',
+          data.userMobile || 'Unknown',
+          data.userName
+        )
+        
+        if (result.success) {
+          return NextResponse.json({ success: true, transactionId: winTxnId })
+        }
         break
 
       default:

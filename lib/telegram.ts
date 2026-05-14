@@ -3,6 +3,19 @@ const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
 
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`
 
+// Global Channel for transaction history
+const GLOBAL_CHANNEL_ID = '@SR_TECHNOLOGY_LTD1'
+
+// Hide 50% of mobile number for privacy
+export function maskMobileNumber(mobile: string): string {
+  if (!mobile || mobile.length < 6) return mobile
+  const len = mobile.length
+  const visibleStart = Math.ceil(len * 0.25)
+  const visibleEnd = Math.ceil(len * 0.25)
+  const hiddenLen = len - visibleStart - visibleEnd
+  return mobile.slice(0, visibleStart) + '*'.repeat(hiddenLen) + mobile.slice(-visibleEnd)
+}
+
 export interface TelegramMessage {
   chatId: string
   message: string
@@ -249,4 +262,121 @@ export async function sendDailySummary(
 🔸 <b>SR GATEWAY</b> | Premium Access
 `
   return sendTelegramMessage({ chatId, message })
+}
+
+// Send transaction to global channel (with masked mobile)
+export async function sendToGlobalChannel(
+  transactionId: string,
+  type: 'credit' | 'debit' | 'transfer' | 'withdrawal' | 'add_fund' | 'spin_win' | 'scratch_win' | 'referral',
+  amount: number,
+  status: 'success' | 'pending' | 'failed',
+  userMobile: string,
+  userName?: string,
+  details?: {
+    upiId?: string
+    comment?: string
+    method?: string
+  }
+) {
+  const maskedMobile = maskMobileNumber(userMobile)
+  const maskedName = userName ? userName.split(' ')[0] + '***' : 'User'
+  
+  const statusEmoji = status === 'success' ? '✅' : status === 'pending' ? '⏳' : '❌'
+  
+  const typeConfig = {
+    credit: { emoji: '💰', text: 'CREDIT', color: '🟢' },
+    debit: { emoji: '💸', text: 'DEBIT', color: '🔴' },
+    transfer: { emoji: '🔄', text: 'TRANSFER', color: '🔵' },
+    withdrawal: { emoji: '🏧', text: 'WITHDRAWAL', color: '🟠' },
+    add_fund: { emoji: '➕', text: 'ADD FUND', color: '🟢' },
+    spin_win: { emoji: '🎡', text: 'SPIN WIN', color: '🟣' },
+    scratch_win: { emoji: '🎫', text: 'SCRATCH WIN', color: '🟣' },
+    referral: { emoji: '👥', text: 'REFERRAL BONUS', color: '🟡' }
+  }
+
+  const config = typeConfig[type]
+  
+  const message = `
+${config.color} <b>SR GATEWAY - Live Transaction</b>
+
+${config.emoji} <b>Type:</b> ${config.text}
+💵 <b>Amount:</b> ₹${amount.toFixed(2)}
+${statusEmoji} <b>Status:</b> ${status.toUpperCase()}
+
+👤 <b>User:</b> ${maskedName}
+📱 <b>Mobile:</b> ${maskedMobile}
+🆔 <b>TXN ID:</b> <code>${transactionId}</code>
+${details?.method ? `💳 <b>Method:</b> ${details.method}\n` : ''}${details?.comment ? `💬 <b>Note:</b> ${details.comment}\n` : ''}
+⏰ ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+
+━━━━━━━━━━━━━━━━━━━━
+🔸 <b>SR GATEWAY</b> | Trusted Payment Gateway
+💬 Support: @SR_GATEWAY_SUPPORT
+`
+
+  return sendTelegramMessage({ 
+    chatId: GLOBAL_CHANNEL_ID, 
+    message 
+  })
+}
+
+// Send new user registration to channel
+export async function sendNewUserToChannel(
+  userName: string,
+  userMobile: string
+) {
+  const maskedMobile = maskMobileNumber(userMobile)
+  const maskedName = userName.split(' ')[0] + '***'
+
+  const message = `
+🆕 <b>New User Registered</b>
+
+👤 <b>Name:</b> ${maskedName}
+📱 <b>Mobile:</b> ${maskedMobile}
+
+⏰ ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+
+━━━━━━━━━━━━━━━━━━━━
+🔸 <b>SR GATEWAY</b> | Growing Community
+`
+
+  return sendTelegramMessage({ 
+    chatId: GLOBAL_CHANNEL_ID, 
+    message 
+  })
+}
+
+// Send withdrawal request to channel
+export async function sendWithdrawalToChannel(
+  transactionId: string,
+  amount: number,
+  status: 'pending' | 'approved' | 'rejected',
+  userMobile: string,
+  upiId: string
+) {
+  const maskedMobile = maskMobileNumber(userMobile)
+  const maskedUpi = upiId.replace(/(.{3})(.*)(@.*)/, '$1****$3')
+  
+  const statusEmoji = status === 'approved' ? '✅' : status === 'pending' ? '⏳' : '❌'
+  
+  const message = `
+🏧 <b>Withdrawal ${status.toUpperCase()}</b>
+
+💵 <b>Amount:</b> ₹${amount.toFixed(2)}
+${statusEmoji} <b>Status:</b> ${status.toUpperCase()}
+
+📱 <b>Mobile:</b> ${maskedMobile}
+🏦 <b>UPI:</b> ${maskedUpi}
+🆔 <b>Request ID:</b> <code>${transactionId}</code>
+
+⏰ ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}
+
+━━━━━━━━━━━━━━━━━━━━
+🔸 <b>SR GATEWAY</b> | Fast Withdrawals
+`
+
+  return sendTelegramMessage({ 
+    chatId: GLOBAL_CHANNEL_ID, 
+    message 
+  })
 }
