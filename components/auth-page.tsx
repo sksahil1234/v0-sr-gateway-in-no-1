@@ -39,6 +39,7 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
   const [otpSent, setOtpSent] = useState(false)
   const [otp, setOtp] = useState('')
   const [agreedToTerms, setAgreedToTerms] = useState(false)
+  const [isOtpVerified, setIsOtpVerified] = useState(false)
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -73,6 +74,10 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
       toast.error('Please agree to terms and conditions')
       return
     }
+    if (registerTelegramId && !isOtpVerified) {
+      toast.error('Please verify OTP first')
+      return
+    }
 
     setIsLoading(true)
     const success = await register(registerName, registerMobile, registerPin, registerTelegramId)
@@ -86,13 +91,68 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
     }
   }
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
     if (!registerMobile || registerMobile.length !== 10) {
       toast.error('Please enter a valid 10-digit mobile number')
       return
     }
-    setOtpSent(true)
-    toast.success('OTP sent to your Telegram!')
+    if (!registerTelegramId) {
+      toast.error('Please enter your Telegram Chat ID first')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const response = await fetch('/api/otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mobile: registerMobile,
+          telegramChatId: registerTelegramId
+        })
+      })
+      
+      const data = await response.json()
+      if (data.success) {
+        setOtpSent(true)
+        toast.success('OTP sent to your Telegram!')
+      } else {
+        toast.error(data.error || 'Failed to send OTP')
+      }
+    } catch {
+      toast.error('Network error. Please try again.')
+    }
+    setIsLoading(false)
+  }
+
+  const handleVerifyOtp = async () => {
+    if (!otp || otp.length !== 6) {
+      toast.error('Please enter valid 6-digit OTP')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const response = await fetch('/api/otp', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mobile: registerMobile,
+          otp
+        })
+      })
+      
+      const data = await response.json()
+      if (data.success) {
+        setIsOtpVerified(true)
+        toast.success('OTP verified successfully!')
+      } else {
+        toast.error(data.error || 'Invalid OTP')
+      }
+    } catch {
+      toast.error('Network error. Please try again.')
+    }
+    setIsLoading(false)
   }
 
   return (
@@ -232,47 +292,78 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
                   </div>
                   <Input
                     type="text"
-                    placeholder="Telegram ID"
+                    placeholder="Telegram Chat ID"
                     value={registerTelegramId}
                     onChange={(e) => setRegisterTelegramId(e.target.value)}
                     className="border-0 bg-transparent focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
+                    disabled={isOtpVerified}
                   />
-                  <a 
-                    href="https://t.me/SRGatewayBot" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="px-3 text-primary text-sm hover:underline flex items-center gap-1"
-                  >
-                    Get ID <ExternalLink className="w-3 h-3" />
-                  </a>
+                  {isOtpVerified ? (
+                    <div className="px-3">
+                      <CheckCircle2 className="w-5 h-5 text-green-500" />
+                    </div>
+                  ) : (
+                    <a 
+                      href="https://t.me/SRGatewayBot" 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="px-3 text-primary text-sm hover:underline flex items-center gap-1 whitespace-nowrap"
+                    >
+                      Get ID <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
                 </div>
               </div>
 
               {/* OTP Section */}
-              {!otpSent ? (
-                <Button
-                  type="button"
-                  onClick={handleSendOtp}
-                  className="w-full bg-secondary hover:bg-secondary/80 text-foreground font-semibold py-6 rounded-xl border border-border"
-                >
-                  <Send className="w-5 h-5 mr-2 text-primary" />
-                  Send OTP
-                </Button>
-              ) : (
-                <div className="relative">
-                  <div className="flex items-center bg-secondary border border-border rounded-xl overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-3 border-r border-border">
-                      <CheckCircle2 className="w-4 h-4 text-success" />
+              {registerTelegramId && !isOtpVerified && (
+                <>
+                  {!otpSent ? (
+                    <Button
+                      type="button"
+                      onClick={handleSendOtp}
+                      disabled={isLoading}
+                      className="w-full bg-secondary hover:bg-secondary/80 text-foreground font-semibold py-6 rounded-xl border border-border"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                      ) : (
+                        <Send className="w-5 h-5 mr-2 text-primary" />
+                      )}
+                      Send OTP to Telegram
+                    </Button>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="relative">
+                        <div className="flex items-center bg-secondary border border-border rounded-xl overflow-hidden">
+                          <div className="flex items-center gap-2 px-4 py-3 border-r border-border">
+                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                          </div>
+                          <Input
+                            type="number"
+                            placeholder="Enter 6-digit OTP"
+                            value={otp}
+                            onChange={(e) => setOtp(e.target.value.slice(0, 6))}
+                            className="border-0 bg-transparent focus-visible:ring-0 text-foreground placeholder:text-muted-foreground text-center tracking-widest"
+                          />
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={handleVerifyOtp}
+                        disabled={isLoading || otp.length !== 6}
+                        className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-5 rounded-xl"
+                      >
+                        {isLoading ? (
+                          <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                        ) : (
+                          <CheckCircle2 className="w-5 h-5 mr-2" />
+                        )}
+                        Verify OTP
+                      </Button>
                     </div>
-                    <Input
-                      type="number"
-                      placeholder="Enter OTP"
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value.slice(0, 6))}
-                      className="border-0 bg-transparent focus-visible:ring-0 text-foreground placeholder:text-muted-foreground"
-                    />
-                  </div>
-                </div>
+                  )}
+                </>
               )}
 
               {/* Telegram Bot Link */}
@@ -283,7 +374,7 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
                 className="flex items-center justify-center gap-2 text-sm text-primary hover:underline"
               >
                 <Send className="w-4 h-4" />
-                Start Bot For OTP
+                Start Bot to Get Chat ID
                 <span className="text-muted-foreground">@SRGatewayBot</span>
               </a>
 
@@ -301,7 +392,7 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
               {/* Register Button */}
               <Button 
                 type="submit" 
-                disabled={isLoading || !otpSent}
+                disabled={isLoading || (registerTelegramId && !isOtpVerified)}
                 className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-6 rounded-xl"
               >
                 {isLoading ? (
@@ -316,7 +407,12 @@ export function AuthPage({ onSuccess }: AuthPageProps) {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setIsLogin(true)}
+                onClick={() => {
+                  setIsLogin(true)
+                  setOtpSent(false)
+                  setOtp('')
+                  setIsOtpVerified(false)
+                }}
                 className="w-full border-primary text-primary hover:bg-primary/10 font-semibold py-6 rounded-xl"
               >
                 <LogIn className="w-5 h-5 mr-2" />
