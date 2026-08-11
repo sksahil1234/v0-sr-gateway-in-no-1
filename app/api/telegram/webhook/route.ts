@@ -165,16 +165,21 @@ async function answerCallbackQuery(callbackQueryId: string, text?: string) {
   })
 }
 
-// GET request to set up webhook (call this once after deployment)
+const PRODUCTION_WEBHOOK_URL = 'https://srwallet.vercel.app/api/telegram/webhook'
+
+// GET request to inspect or configure the production webhook.
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const action = searchParams.get('action')
   
+  if (!BOT_TOKEN) {
+    return NextResponse.json({ success: false, error: 'TELEGRAM_BOT_TOKEN is not configured' }, { status: 500 })
+  }
+  
   if (action === 'set') {
-    // Get the webhook URL from the request
-    const host = request.headers.get('host')
-    const protocol = host?.includes('localhost') ? 'http' : 'https'
-    const webhookUrl = `${protocol}://${host}/api/telegram/webhook`
+    // Always use the canonical production URL. Using the preview host here
+    // leaves Telegram delivering updates to a temporary deployment.
+    const webhookUrl = PRODUCTION_WEBHOOK_URL
     
     const url = `https://api.telegram.org/bot${BOT_TOKEN}/setWebhook`
     
