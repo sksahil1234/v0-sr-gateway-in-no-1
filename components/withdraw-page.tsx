@@ -20,7 +20,7 @@ interface WithdrawPageProps {
 }
 
 export function WithdrawPage({ onBack }: WithdrawPageProps) {
-  const { user, addWithdrawal } = useWallet()
+  const { user } = useWallet()
   const [upiId, setUpiId] = useState('')
   const [amount, setAmount] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -49,19 +49,32 @@ export function WithdrawPage({ onBack }: WithdrawPageProps) {
       return
     }
 
+    if (!user?.id) {
+      toast.error('Please login again before submitting a withdrawal')
+      return
+    }
+
     setIsLoading(true)
-    
-    await new Promise(resolve => setTimeout(resolve, 1500))
-    
-    addWithdrawal({
-      amount: amountNum,
-      upiId
-    })
-    
-    setIsLoading(false)
-    toast.success('Withdrawal request submitted!')
-    setUpiId('')
-    setAmount('')
+    try {
+      const response = await fetch('/api/wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'withdrawal', userId: user.id, amount: amountNum, upiId }),
+      })
+      const data = await response.json()
+      if (!data.success) {
+        toast.error(data.error || 'Could not submit withdrawal')
+        return
+      }
+      toast.success('Withdrawal submitted for admin review.')
+      setUpiId('')
+      setAmount('')
+    } catch (error) {
+      console.error('[v0] Withdrawal request failed', error)
+      toast.error('Network error. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (

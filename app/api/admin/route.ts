@@ -38,12 +38,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, settings })
     }
     const table = body.type === 'deposit' ? 'deposit_requests' : body.type === 'withdrawal' ? 'withdrawal_requests' : 'p2p_requests'
+    if (body.status === 'approved' && body.type === 'withdrawal') {
+      const [pending] = await db(`withdrawal_requests?id=eq.${encodeURIComponent(body.id)}&status=eq.pending&select=user_id,amount`)
+      if (!pending) return NextResponse.json({ error: 'Withdrawal request not found' }, { status: 404 })
+      const [user] = await db(`wallet_users?id=eq.${encodeURIComponent(pending.user_id)}&select=balance`)
+      if (!user || Number(user.balance) < Number(pending.amount)) return NextResponse.json({ error: 'User balance is no longer sufficient' }, { status: 409 })
+    }
     const rows = await db(`${table}?id=eq.${encodeURIComponent(body.id)}&status=eq.pending`, { method: 'PATCH', body: JSON.stringify({ status: body.status, admin_note: body.note || null, reviewed_at: new Date().toISOString() }) })
     if (!rows[0]) return NextResponse.json({ error: 'Request already reviewed or not found' }, { status: 409 })
-    if (body.status === 'approved' && body.type === 'deposit') {
+    if (body.status === 'approved' && (body.type === 'deposit' || body.type === 'withdrawal')) {
       const [user] = await db(`wallet_users?id=eq.${encodeURIComponent(rows[0].user_id)}&select=balance`)
-      await db(`wallet_users?id=eq.${encodeURIComponent(rows[0].user_id)}`, { method: 'PATCH', body: JSON.stringify({ balance: Number(user.balance) + Number(rows[0].amount) }) })
-      await db('wallet_transactions', { method: 'POST', body: JSON.stringify({ id: `TX-${crypto.randomUUID()}`, user_id: rows[0].user_id, type: 'credit', amount: rows[0].amount, comment: `Deposit approved: ${rows[0].utr}`, status: 'success' }) })
+      const currentBalance = Number(user?.balance || 0)
+      const amount = Number(rows[0].amount)
+      if (body.type === 'withdrawal' && currentBalance < amount) {
+        return NextResponse.json({ error: 'User balance is no longer sufficient' }, { status: 409 })
+      }
+      const nextBalance = body.type === 'deposit' ? currentBalance + amount : currentBalance - amount
+      await db(`wallet_users?id=eq.${encodeURIComponent(rows[0].user_id)}`, { method: 'PATCH', body: JSON.stringify({ balance: nextBalance }) })
+      await db('wallet_transactions', { method: 'POST', body: JSON.stringify({ id: `TX-${crypto.randomUUID()}`, user_id: rows[0].user_id, type: body.type === 'deposit' ? 'credit' : 'debit', amount, fee: Number(rows[0].fee || 0), comment: `${body.type} approved`, status: 'success' }) })
     }
     return NextResponse.json({ success: true, request: rows[0] })
   } catch (error) {

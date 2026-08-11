@@ -73,6 +73,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: true, request: rows[0], message: 'Deposit submitted for admin review' })
     }
 
+    if (action === 'withdrawal') {
+      const amount = Number(body.amount)
+      if (!body.userId || !body.upiId || !Number.isFinite(amount) || amount < 10) return apiError('Invalid withdrawal details')
+      const users = await supabase(`wallet_users?id=eq.${encodeURIComponent(body.userId)}&select=id,balance&limit=1`)
+      if (!users[0] || Number(users[0].balance) < amount) return apiError('Insufficient balance', 409)
+      const requestId = `WDR-${crypto.randomUUID()}`
+      const rows = await supabase('withdrawal_requests', { method: 'POST', body: JSON.stringify({ id: requestId, user_id: body.userId, amount, upi_id: body.upiId }) })
+      return NextResponse.json({ success: true, request: rows[0], message: 'Withdrawal submitted for admin review' })
+    }
+
     if (action === 'settings') {
       const rows = await supabase('wallet_settings?id=eq.true&limit=1')
       return NextResponse.json({ success: true, settings: rows[0] })
