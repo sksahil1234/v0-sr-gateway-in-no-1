@@ -21,7 +21,7 @@ interface AddFundPageProps {
 }
 
 export function AddFundPage({ onBack }: AddFundPageProps) {
-  const { user, updateBalance, addTransaction } = useWallet()
+  const { user } = useWallet()
   const [utr, setUtr] = useState('')
   const [amount, setAmount] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -55,23 +55,32 @@ export function AddFundPage({ onBack }: AddFundPageProps) {
       return
     }
 
+    if (!user?.id) {
+      toast.error('Please login again before submitting a deposit')
+      return
+    }
+
     setIsLoading(true)
-    
-    // Simulate verification (in real app, this would verify with payment gateway)
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    updateBalance(amountNum)
-    addTransaction({
-      type: 'credit',
-      amount: amountNum,
-      comment: `Fund Added - UTR: ${utr}`,
-      status: 'success'
-    })
-    
-    setIsLoading(false)
-    toast.success(`₹${amountNum} added to your wallet!`)
-    setUtr('')
-    setAmount('')
+    try {
+      const response = await fetch('/api/wallet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deposit', userId: user.id, amount: amountNum, utr }),
+      })
+      const data = await response.json()
+      if (!data.success) {
+        toast.error(data.error || 'Could not submit deposit')
+        return
+      }
+      toast.success('Deposit submitted. Balance will update after admin approval.')
+      setUtr('')
+      setAmount('')
+    } catch (error) {
+      console.error('[v0] Deposit request failed', error)
+      toast.error('Network error. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (

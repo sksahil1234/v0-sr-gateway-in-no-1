@@ -1,0 +1,52 @@
+import { NextRequest, NextResponse } from 'next/server'
+
+const url = process.env.SUPABASE_URL
+const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+const adminSecret = process.env.ADMIN_PANEL_SECRET || 'srwallet-admin'
+
+function authorized(request: NextRequest) {
+  return request.headers.get('x-admin-secret') === adminSecret
+}
+
+async function db(path: string, init?: RequestInit) {
+  if (!url || !key) throw new Error('Supabase is not configured')
+  const response = await fetch(`${url}/rest/v1/${path}`, { ...init, headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=representation', ...(init?.headers ?? {}) }, cache: 'no-store' })
+  const text = await response.text()
+  const data = text ? JSON.parse(text) : null
+  if (!response.ok) throw new Error(data?.message || 'Database request failed')
+  return data
+}
+
+export async function GET(request: NextRequest) {
+  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const [users, deposits, withdrawals, p2p, settings] = await Promise.all([
+    db('wallet_users?select=id,name,mobile,telegram_id,balance,is_vip,is_verified,created_at&order=created_at.desc'),
+    db('deposit_requests?select=*,wallet_users(name,mobile)&order=created_at.desc'),
+    db('withdrawal_requests?select=*,wallet_users(name,mobile)&order=created_at.desc'),
+    db('p2p_requests?select=*,sender:wallet_users!sender_id(name,mobile),receiver:wallet_users!receiver_id(name,mobile)&order=created_at.desc'),
+    db('wallet_settings?id=eq.true&limit=1'),
+  ])
+  return NextResponse.json({ users, deposits, withdrawals, p2p, settings: settings[0] })
+}
+
+export async function POST(request: NextRequest) {
+  if (!authorized(request)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  try {
+    const body = await request.json()
+    if (body.action === 'settings') {
+      const [settings] = await db('wallet_settings?id=eq.true', { method: 'PATCH', body: JSON.stringify({ ...body.settings, updated_at: new Date().toISOString() }) })
+      return NextResponse.json({ success: true, settings })
+    }
+    const table = body.type === 'deposit' ? 'deposit_requests' : body.type === 'withdrawal' ? 'withdrawal_requests' : 'p2p_requests'
+    const rows = await db(`${table}?id=eq.${encodeURIComponent(body.id)}&status=eq.pending`, { method: 'PATCH', body: JSON.stringify({ status: body.status, admin_note: body.note || null, reviewed_at: new Date().toISOString() }) })
+    if (!rows[0]) return NextResponse.json({ error: 'Request already reviewed or not found' }, { status: 409 })
+    if (body.status === 'approved' && body.type === 'deposit') {
+      const [user] = await db(`wallet_users?id=eq.${encodeURIComponent(rows[0].user_id)}&select=balance`)
+      await db(`wallet_users?id=eq.${encodeURIComponent(rows[0].user_id)}`, { method: 'PATCH', body: JSON.stringify({ balance: Number(user.balance) + Number(rows[0].amount) }) })
+      await db('wallet_transactions', { method: 'POST', body: JSON.stringify({ id: `TX-${crypto.randomUUID()}`, user_id: rows[0].user_id, type: 'credit', amount: rows[0].amount, comment: `Deposit approved: ${rows[0].utr}`, status: 'success' }) })
+    }
+    return NextResponse.json({ success: true, request: rows[0] })
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Admin action failed' }, { status: 500 })
+  }
+}

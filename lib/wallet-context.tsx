@@ -140,93 +140,32 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }
 
   const login = async (mobile: string, pin: string): Promise<boolean> => {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    const savedUser = localStorage.getItem('sr_gateway_user')
-    if (savedUser) {
-      const userData = JSON.parse(savedUser)
-      if (userData.mobile === mobile && userData.pin === pin) {
-        setUser(userData)
-        
-        // Send security alert for login
-        if (userData.telegramId) {
-          sendTelegramNotification('security', {
-            chatId: userData.telegramId,
-            alertType: 'login',
-            device: navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop',
-          })
-        }
-        
-        return true
-      }
-    }
-    
-    // Demo account
-    if (mobile === '9999999999' && pin === '1234') {
-      const demoUser: User = {
-        id: generateId(),
-        name: 'Demo User',
-        mobile: '9999999999',
-        pin: '1234',
-        balance: 500,
-        isVip: true,
-        isVerified: true,
-        memberSince: 'MAY 2026',
-        apiKey: generateApiKey(),
-        transactions: [
-          { id: generateTransactionId(), type: 'credit', amount: 500, comment: 'Welcome Bonus', timestamp: new Date().toISOString(), status: 'success' }
-        ],
-        withdrawals: [],
-        scratchCards: [
-          { id: generateId(), amount: 10, isScratched: false, timestamp: new Date().toISOString() },
-          { id: generateId(), amount: 25, isScratched: false, timestamp: new Date().toISOString() },
-        ],
-        createdCodes: []
-      }
-      setUser(demoUser)
+    try {
+      const response = await fetch('/api/wallet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'login', mobile, pin }) })
+      const data = await response.json()
+      if (!data.success) return false
+      setUser(data.user)
+      localStorage.setItem('sr_gateway_user', JSON.stringify(data.user))
       return true
+    } catch (error) {
+      console.error('[v0] Login request failed', error)
+      return false
     }
-    
-    return false
   }
 
   const register = async (name: string, mobile: string, pin: string, telegramId?: string): Promise<boolean> => {
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    
-    const newUser: User = {
-      id: generateId(),
-      name,
-      mobile,
-      pin,
-      telegramId,
-      balance: 0,
-      isVip: false,
-      isVerified: !!telegramId,
-      memberSince: new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase(),
-      apiKey: generateApiKey(),
-      transactions: [],
-      withdrawals: [],
-      scratchCards: [
-        { id: generateId(), amount: Math.floor(Math.random() * 20) + 5, isScratched: false, timestamp: new Date().toISOString() },
-      ],
-      createdCodes: []
+    try {
+      const response = await fetch('/api/wallet', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'register', name, mobile, pin, telegramId }) })
+      const data = await response.json()
+      if (!data.success) return false
+      setUser(data.user)
+      localStorage.setItem('sr_gateway_user', JSON.stringify(data.user))
+      if (telegramId) await sendTelegramNotification('welcome', { chatId: telegramId, name, mobile })
+      return true
+    } catch (error) {
+      console.error('[v0] Registration request failed', error)
+      return false
     }
-    
-    setUser(newUser)
-    localStorage.setItem('sr_gateway_user', JSON.stringify(newUser))
-    
-    // Send welcome message via Telegram
-    if (telegramId) {
-      await sendTelegramNotification('welcome', {
-        chatId: telegramId,
-        name,
-        mobile
-      })
-    }
-    
-    return true
   }
 
   const logout = () => {
