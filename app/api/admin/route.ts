@@ -50,12 +50,20 @@ export async function POST(request: NextRequest) {
       const [user] = await db(`wallet_users?id=eq.${encodeURIComponent(rows[0].user_id)}&select=balance`)
       const currentBalance = Number(user?.balance || 0)
       const amount = Number(rows[0].amount)
-      if (body.type === 'withdrawal' && currentBalance < amount) {
-        return NextResponse.json({ error: 'User balance is no longer sufficient' }, { status: 409 })
-      }
+      if (body.type === 'withdrawal' && currentBalance < amount) return NextResponse.json({ error: 'User balance is no longer sufficient' }, { status: 409 })
       const nextBalance = body.type === 'deposit' ? currentBalance + amount : currentBalance - amount
       await db(`wallet_users?id=eq.${encodeURIComponent(rows[0].user_id)}`, { method: 'PATCH', body: JSON.stringify({ balance: nextBalance }) })
       await db('wallet_transactions', { method: 'POST', body: JSON.stringify({ id: `TX-${crypto.randomUUID()}`, user_id: rows[0].user_id, type: body.type === 'deposit' ? 'credit' : 'debit', amount, fee: Number(rows[0].fee || 0), comment: `${body.type} approved`, status: 'success' }) })
+    }
+    if (body.status === 'approved' && body.type === 'p2p') {
+      const amount = Number(rows[0].amount)
+      const [sender] = await db(`wallet_users?id=eq.${encodeURIComponent(rows[0].sender_id)}&select=balance`)
+      const [receiver] = await db(`wallet_users?id=eq.${encodeURIComponent(rows[0].receiver_id)}&select=balance`)
+      if (!sender || !receiver || Number(sender.balance) < amount + Number(rows[0].fee || 0)) return NextResponse.json({ error: 'Sender balance is no longer sufficient' }, { status: 409 })
+      await db(`wallet_users?id=eq.${encodeURIComponent(rows[0].sender_id)}`, { method: 'PATCH', body: JSON.stringify({ balance: Number(sender.balance) - amount - Number(rows[0].fee || 0) }) })
+      await db(`wallet_users?id=eq.${encodeURIComponent(rows[0].receiver_id)}`, { method: 'PATCH', body: JSON.stringify({ balance: Number(receiver.balance) + amount }) })
+      await db('wallet_transactions', { method: 'POST', body: JSON.stringify({ id: `TX-${crypto.randomUUID()}`, user_id: rows[0].sender_id, type: 'transfer_out', amount, fee: Number(rows[0].fee || 0), to_mobile: rows[0].receiver_id, comment: 'P2P approved', status: 'success' }) })
+      await db('wallet_transactions', { method: 'POST', body: JSON.stringify({ id: `TX-${crypto.randomUUID()}`, user_id: rows[0].receiver_id, type: 'transfer_in', amount, from_mobile: rows[0].sender_id, comment: 'P2P received', status: 'success' }) })
     }
     return NextResponse.json({ success: true, request: rows[0] })
   } catch (error) {

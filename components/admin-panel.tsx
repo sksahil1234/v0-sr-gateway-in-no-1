@@ -46,7 +46,7 @@ export function AdminPanel() {
     toast.success('Settings saved')
   }
 
-  const pending = useMemo(() => [...(data?.deposits || []).filter(x => x.status === 'pending').map(x => ({ ...x, type: 'deposit' })), ...(data?.withdrawals || []).filter(x => x.status === 'pending').map(x => ({ ...x, type: 'withdrawal' }))], [data])
+  const pending = useMemo(() => [...(data?.deposits || []).filter(x => x.status === 'pending').map(x => ({ ...x, type: 'deposit' })), ...(data?.withdrawals || []).filter(x => x.status === 'pending').map(x => ({ ...x, type: 'withdrawal' })), ...(data?.p2p || []).filter(x => x.status === 'pending').map(x => ({ ...x, type: 'p2p' }))], [data])
 
   if (!savedSecret) return <main className="min-h-screen bg-background p-4 flex items-center justify-center"><Card className="w-full max-w-md"><CardHeader><CardTitle className="flex items-center gap-2"><ShieldCheck /> Admin access</CardTitle><CardDescription>Enter the private admin secret to manage users and financial requests.</CardDescription></CardHeader><CardContent className="flex flex-col gap-4"><Input type="password" placeholder="Admin secret" value={secret} onChange={e => setSecret(e.target.value)} onKeyDown={e => e.key === 'Enter' && load(secret)} /><Button onClick={() => load(secret)} disabled={loading}>{loading ? 'Checking…' : 'Open admin panel'}</Button></CardContent></Card></main>
 
